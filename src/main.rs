@@ -18,7 +18,12 @@ impl std::fmt::Debug for Line {
     }
 }
 
-pub fn build_vector<R: Rng>(target_line: &Line, length: usize, _rng: &mut R) -> Vec<Point> {
+pub fn build_vector<R: Rng>(
+    target_line: &Line,
+    length: usize,
+    variation: f64,
+    rng: &mut R,
+) -> Vec<Point> {
     let mut result = Vec::with_capacity(length);
     let min_x: f64 = -1.0;
     let max_x: f64 = 1.0;
@@ -27,7 +32,8 @@ pub fn build_vector<R: Rng>(target_line: &Line, length: usize, _rng: &mut R) -> 
     let dx = range_x / point_count as f64;
     for i in 0..length {
         let x: f64 = dx * i as f64 + min_x;
-        let y: f64 = target_line.0 * x + target_line.1;
+        let offset = rng.random_range(-variation..variation);
+        let y: f64 = target_line.0 * x + target_line.1 + offset;
         result.push(Point(x, y));
     }
     result
@@ -50,8 +56,10 @@ pub fn train_simple_trick<R: Rng>(
     points: &Vec<Point>,
     iterations: usize,
     target: &Line,
+    early_converge: f64,
     rng: &mut R,
 ) -> Line {
+    println!("==========================================");
     println!("Simple trick ({} iterations)", iterations);
     println!("Targeting {:?}", target);
     let reporting_interval = iterations / 20;
@@ -61,6 +69,11 @@ pub fn train_simple_trick<R: Rng>(
         }
         if i % reporting_interval == 0 {
             println!("Iteration {}: {:?}", i, line);
+        }
+        if (line.0 - target.0).abs() < early_converge && (line.1 - target.1).abs() < early_converge
+        {
+            println!("Converged early on iteration {}!", i);
+            break;
         }
     }
     println!("Final {:?} (should be {:?})", line, target);
@@ -79,8 +92,10 @@ pub fn train_square_trick<R: Rng>(
     iterations: usize,
     target: &Line,
     learning_rate: f64,
+    early_converge: f64,
     rng: &mut R,
 ) -> Line {
+    println!("==========================================");
     println!("Square trick ({} iterations)", iterations);
     println!("Targeting {:?}", target);
     let reporting_interval = iterations / 50;
@@ -90,6 +105,11 @@ pub fn train_square_trick<R: Rng>(
         }
         if i % reporting_interval == 0 {
             println!("Iteration {}: {:?}", i, line);
+        }
+        if (line.0 - target.0).abs() < early_converge && (line.1 - target.1).abs() < early_converge
+        {
+            println!("Converged early on iteration {}!", i);
+            break;
         }
     }
     println!("Final {:?} (should be {:?})", line, target);
@@ -113,8 +133,10 @@ pub fn train_absolute_trick<R: Rng>(
     iterations: usize,
     target: &Line,
     learning_rate: f64,
+    early_converge: f64,
     rng: &mut R,
 ) -> Line {
+    println!("==========================================");
     println!("Absolute trick ({} iterations)", iterations);
     println!("Targeting {:?}", target);
     let reporting_interval = iterations / 50;
@@ -125,44 +147,54 @@ pub fn train_absolute_trick<R: Rng>(
         if i % reporting_interval == 0 {
             println!("Iteration {}: {:?}", i, line);
         }
+        if (line.0 - target.0).abs() < early_converge && (line.1 - target.1).abs() < early_converge
+        {
+            println!("Converged early on iteration {}!", i);
+            break;
+        }
     }
     println!("Final {:?} (should be {:?})", line, target);
     line
 }
 
 fn main() {
-    let actual_m = 1.0;
-    let actual_b = 0.0;
-    let initial_m = 10.0;
-    let initial_b = 10.0;
-    let length = 1000;
     let mut rng = rand::rng();
+    let actual_m = rng.random_range(-100.0..100.0);
+    let actual_b = rng.random_range(-100.0..100.0);
+    let initial_m = rng.random_range(-100.0..100.0);
+    let initial_b = rng.random_range(-100.0..100.0);
+    let length = 1000;
     let target_line = Line(actual_m, actual_b);
-    let points = build_vector(&target_line, length, &mut rng);
+    let variation = 0.00001;
+    let early_converge = 0.001;
+    let points = build_vector(&target_line, length, variation, &mut rng);
 
     train_simple_trick(
         Line(initial_m, initial_b),
         &points,
-        30000,
+        5000000,
         &target_line,
+        early_converge,
         &mut rng,
     );
 
     train_square_trick(
         Line(initial_m, initial_b),
         &points,
-        30000,
+        5000000,
         &target_line,
         0.001,
+        early_converge,
         &mut rng,
     );
 
     train_absolute_trick(
         Line(initial_m, initial_b),
         &points,
-        35000,
+        5000000,
         &target_line,
         0.001,
+        early_converge,
         &mut rng,
     );
 }
