@@ -96,6 +96,40 @@ pub fn train_square_trick<R: Rng>(
     line
 }
 
+pub fn absolute_trick(line: &mut Line, point: &Point, learning_rate: f64) {
+    let y_diff = point.1 - line.predicted_y(point.0);
+    if y_diff > 0.0 {
+        line.0 += learning_rate * point.0;
+        line.1 += learning_rate;
+    } else {
+        line.0 -= learning_rate * point.0;
+        line.1 -= learning_rate;
+    }
+}
+
+pub fn train_absolute_trick<R: Rng>(
+    mut line: Line,
+    points: &Vec<Point>,
+    iterations: usize,
+    target: &Line,
+    learning_rate: f64,
+    rng: &mut R,
+) -> Line {
+    println!("Absolute trick ({} iterations)", iterations);
+    println!("Targeting {:?}", target);
+    let reporting_interval = iterations / 50;
+    for i in 0..iterations {
+        if let Some(random_point) = points.choose(rng) {
+            absolute_trick(&mut line, &random_point, learning_rate);
+        }
+        if i % reporting_interval == 0 {
+            println!("Iteration {}: {:?}", i, line);
+        }
+    }
+    println!("Final {:?} (should be {:?})", line, target);
+    line
+}
+
 fn main() {
     let actual_m = 1.0;
     let actual_b = 0.0;
@@ -118,6 +152,15 @@ fn main() {
         Line(initial_m, initial_b),
         &points,
         30000,
+        &target_line,
+        0.001,
+        &mut rng,
+    );
+
+    train_absolute_trick(
+        Line(initial_m, initial_b),
+        &points,
+        35000,
         &target_line,
         0.001,
         &mut rng,
