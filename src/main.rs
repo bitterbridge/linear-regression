@@ -28,8 +28,7 @@ pub fn build_vector<R: Rng>(
     let min_x: f64 = -1.0;
     let max_x: f64 = 1.0;
     let range_x = max_x - min_x;
-    let point_count = 1000;
-    let dx = range_x / point_count as f64;
+    let dx = range_x / length as f64;
     for i in 0..length {
         let x: f64 = dx * i as f64 + min_x;
         let offset = rng.random_range(-variation..variation);
@@ -39,122 +38,60 @@ pub fn build_vector<R: Rng>(
     result
 }
 
-pub fn simple_trick<R: Rng>(line: &mut Line, point: &Point, rng: &mut R) {
-    let random_m: f64 = rng.random_range(0.00001..0.00009);
-    let random_b: f64 = rng.random_range(0.00001..0.00009);
-    if line.predicted_y(point.0) > point.1 {
-        line.0 -= random_m;
-        line.1 -= random_b;
-    } else {
-        line.0 += random_m;
-        line.1 += random_b;
-    }
-}
-
-pub fn train_simple_trick<R: Rng>(
+pub fn train_model<F: FnMut(&mut Line, &Point)>(
+    name: &str,
     mut line: Line,
-    points: &Vec<Point>,
+    points: &[Point],
     epochs: usize,
     target: &Line,
+    test_points: &[Point],
     early_converge: f64,
-    rng: &mut R,
+    mut update_fn: F,
 ) -> Line {
+    println!("\n");
     println!("==========================================");
-    println!("Simple trick ({} epochs)", epochs);
+    println!("{} ({} epochs)", name, epochs);
+    println!("Starting {:?}", line);
     println!("Targeting {:?}", target);
     let reporting_interval = epochs / 10;
     for i in 0..epochs {
-        for j in 0..points.len() {
-            simple_trick(&mut line, &points[j], rng);
+        for point in points {
+            update_fn(&mut line, point);
         }
         if i % reporting_interval == 0 {
             println!("Epoch {}: {:?}", i, line);
         }
         if (line.0 - target.0).abs() < early_converge && (line.1 - target.1).abs() < early_converge
         {
-            println!("Converged early on epoch {}!", i);
+            println!("Converged at epoch {}", i);
             break;
         }
     }
     println!("Final {:?} (should be {:?})", line, target);
+    test_line(name, &line, test_points);
     line
 }
 
-pub fn square_trick(line: &mut Line, point: &Point, learning_rate: f64) {
-    let y_diff = point.1 - line.predicted_y(point.0);
-    line.0 += learning_rate * point.0 * y_diff;
-    line.1 += learning_rate * y_diff;
-}
-
-pub fn train_square_trick<R: Rng>(
-    mut line: Line,
-    points: &Vec<Point>,
-    epochs: usize,
-    target: &Line,
-    learning_rate: f64,
-    early_converge: f64,
-    _rng: &mut R,
-) -> Line {
-    println!("==========================================");
-    println!("Square trick ({} epochs)", epochs);
-    println!("Targeting {:?}", target);
-    let reporting_interval = epochs / 10;
-    for i in 0..epochs {
-        for j in 0..points.len() {
-            square_trick(&mut line, &points[j], learning_rate);
-        }
-        if i % reporting_interval == 0 {
-            println!("Epoch {}: {:?}", i, line);
-        }
-        if (line.0 - target.0).abs() < early_converge && (line.1 - target.1).abs() < early_converge
-        {
-            println!("Converged early on epoch {}!", i);
-            break;
-        }
+pub fn test_line(name: &str, line: &Line, points: &[Point]) {
+    let mut absolute_error = 0.0;
+    let mut square_error = 0.0;
+    for point in points {
+        let dy = (line.predicted_y(point.0) - point.1).abs();
+        absolute_error += dy;
+        square_error += dy.powi(2);
     }
-    println!("Final {:?} (should be {:?})", line, target);
-    line
-}
-
-pub fn absolute_trick(line: &mut Line, point: &Point, learning_rate: f64) {
-    let y_diff = point.1 - line.predicted_y(point.0);
-    if y_diff > 0.0 {
-        line.0 += learning_rate * point.0;
-        line.1 += learning_rate;
-    } else {
-        line.0 -= learning_rate * point.0;
-        line.1 -= learning_rate;
-    }
-}
-
-pub fn train_absolute_trick<R: Rng>(
-    mut line: Line,
-    points: &Vec<Point>,
-    epochs: usize,
-    target: &Line,
-    learning_rate: f64,
-    early_converge: f64,
-    _rng: &mut R,
-) -> Line {
-    println!("==========================================");
-    println!("Absolute trick ({} epochs)", epochs);
-    println!("Targeting {:?}", target);
-    let reporting_interval = epochs / 10;
-    for i in 0..epochs {
-        for j in 0..points.len() {
-            absolute_trick(&mut line, &points[j], learning_rate);
-        }
-        if i % reporting_interval == 0 {
-            println!("Epoch {}: {:?}", i, line);
-        }
-        if (line.0 - target.0).abs() < early_converge && (line.1 - target.1).abs() < early_converge
-        {
-            println!("Converged early on epoch {}!", i);
-            break;
-        }
-    }
-    println!("Final {:?} (should be {:?})", line, target);
-    line
+    println!("{} Absolute Error: {}", name, absolute_error);
+    println!("{} Square Error: {}", name, square_error);
+    println!(
+        "{} Mean Absolute Error: {}",
+        name,
+        absolute_error / points.len() as f64
+    );
+    println!(
+        "{} Mean Square Error: {}",
+        name,
+        square_error / points.len() as f64
+    )
 }
 
 fn main() {
@@ -166,37 +103,64 @@ fn main() {
     let epochs = 10000;
     let length = 1000;
     let target_line = Line(actual_m, actual_b);
-    let variation = 0.00001;
+    let variation = 0.05;
     let early_converge = 0.001;
     let learning_rate = 0.001;
+    let test_length = 100;
     let points = build_vector(&target_line, length, variation, &mut rng);
+    let test_points = build_vector(&target_line, test_length, variation, &mut rng);
 
-    train_simple_trick(
+    train_model(
+        "Simple Trick",
         Line(initial_m, initial_b),
         &points,
         epochs,
         &target_line,
+        &test_points,
         early_converge,
-        &mut rng,
+        |line, point| {
+            if line.predicted_y(point.0) > point.1 {
+                line.0 -= learning_rate;
+                line.1 -= learning_rate;
+            } else {
+                line.0 += learning_rate;
+                line.1 += learning_rate;
+            }
+        },
     );
 
-    train_square_trick(
+    train_model(
+        "Square Trick",
         Line(initial_m, initial_b),
         &points,
         epochs,
         &target_line,
-        learning_rate,
+        &test_points,
         early_converge,
-        &mut rng,
+        |line, point| {
+            let y_diff = point.1 - line.predicted_y(point.0);
+            line.0 += learning_rate * point.0 * y_diff;
+            line.1 += learning_rate * y_diff;
+        },
     );
 
-    train_absolute_trick(
+    train_model(
+        "Absolute Trick",
         Line(initial_m, initial_b),
         &points,
         epochs,
         &target_line,
-        learning_rate,
+        &test_points,
         early_converge,
-        &mut rng,
+        |line, point| {
+            let y_diff = point.1 - line.predicted_y(point.0);
+            if y_diff > 0.0 {
+                line.0 += learning_rate * point.0;
+                line.1 += learning_rate;
+            } else {
+                line.0 -= learning_rate * point.0;
+                line.1 -= learning_rate;
+            }
+        },
     );
 }
