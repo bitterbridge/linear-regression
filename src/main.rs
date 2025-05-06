@@ -91,7 +91,12 @@ pub fn test_line(name: &str, line: &Line, points: &[Point]) {
         "{} Mean Square Error: {}",
         name,
         square_error / points.len() as f64
-    )
+    );
+    println!(
+        "{} Root Mean Square Error: {}",
+        name,
+        (square_error / points.len() as f64).sqrt()
+    );
 }
 
 fn main() {
